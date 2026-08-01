@@ -42,6 +42,9 @@ lerna-debug.log*
 .env.production.local
 .env.local
 
+# synthetic sample logs (regenerated via scripts/generate-logs.ts)
+/samples
+
 # temp directory
 .temp
 .tmp
