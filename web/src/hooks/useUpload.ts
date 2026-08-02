@@ -1,7 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { api } from '../api/client';
 import { listUploads } from '../api/endpoints';
+import { formatNumber } from '../lib/format';
 
 /**
  * Upload em duas fases, honesto com o comportamento medido do backend:
@@ -12,6 +15,7 @@ import { listUploads } from '../api/endpoints';
  */
 export function useUpload() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [sendProgress, setSendProgress] = useState(0);
   // separados de propósito: o resumo do arquivo persiste após concluir,
   // enquanto o polling de 1s só roda durante o processamento
@@ -46,15 +50,33 @@ export function useUpload() {
     ? uploads.data?.find((u) => u.filename === currentFile)
     : undefined;
 
-  // Concluiu/falhou → para o polling e invalida dashboard/tabela
+  // Concluiu/falhou → para o polling, notifica e invalida dashboard/tabela
   // (num useEffect: efeitos nunca no corpo do render)
   useEffect(() => {
-    if (active?.status === 'COMPLETED' || active?.status === 'FAILED') {
+    if (active?.status === 'COMPLETED') {
       setPolling(false);
+      toast.success(
+        `${active.filename}: ${formatNumber(active.parsedLines)} linhas importadas`,
+        {
+          description:
+            active.errorLines > 0
+              ? `${formatNumber(active.errorLines)} linhas malformadas foram contadas e ignoradas`
+              : undefined,
+          action: {
+            label: 'Ver dashboard',
+            onClick: () => void navigate('/dashboard'),
+          },
+        },
+      );
       void queryClient.invalidateQueries({ queryKey: ['aggregations'] });
       void queryClient.invalidateQueries({ queryKey: ['logs'] });
+    } else if (active?.status === 'FAILED') {
+      setPolling(false);
+      toast.error(`Falha ao processar ${active.filename}`, {
+        description: active.errorMessage ?? undefined,
+      });
     }
-  }, [active?.status, queryClient]);
+  }, [active, queryClient, navigate]);
 
   return { send, sendProgress, active, uploads };
 }
