@@ -1,0 +1,8 @@
+# imagem da API não precisa do frontend (web/ tem Dockerfile próprio)
+web
+node_modules
+dist
+samples
+coverage
+.git
+*.md

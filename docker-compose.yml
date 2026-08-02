@@ -47,6 +47,14 @@ services:
       REDIS_URL: redis://redis:6379
     ports: ["3000:3000"]
 
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_API_URL: http://localhost:3000   # o browser chama a API a partir do host
+    depends_on: [api]
+    ports: ["8080:80"]
+
 volumes:
   pgdata:
   esdata:
