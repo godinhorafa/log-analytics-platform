@@ -75,7 +75,7 @@ O enunciado pede: importar arquivos de log, processar/classificar, armazenar, co
 - Inserts em **batches de 1.000 registros** (multi-row insert no PG, bulk no ES) — ordens de magnitude mais rápido que inserir linha a linha.
 
 **Trade-offs aceitos:**
-- Processamento síncrono ao request: uploads muito grandes mantêm a conexão aberta. Mitigação no escopo: responder `202 Accepted` com `uploadId` imediatamente e processar em background (na mesma instância), com progresso via `GET /uploads/:id`. Em produção, viraria fila + workers (ADR-007).
+- Processamento síncrono ao request: como o parser consome o stream do próprio request com backpressure, a conexão do upload fica aberta durante todo o processamento — a resposta com `uploadId` só chega quando o corpo termina de ser consumido (medido: ~4,5 min para 500k linhas/66MB, throughput ~1.900 linhas/s). O registro do upload, porém, existe desde os primeiros bytes: **o progresso é consultável em paralelo via `GET /uploads/:id` por outra conexão** (é o que o dashboard usa). Alternativa de responder de imediato exigiria bufferizar o arquivo em disco antes de parsear — trocaria latência de resposta por I/O dobrado e disco como limite. Em produção, viraria fila + workers (ADR-007).
 - Linhas malformadas **não abortam o arquivo**: são contadas em `error_lines` e reportadas no status. Um arquivo 99% válido gera 99% de valor.
 
 ---

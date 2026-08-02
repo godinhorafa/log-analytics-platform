@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
@@ -68,7 +68,13 @@ export class QueryService {
     if (filters.to) qb.andWhere('l.timestamp <= :to', { to: filters.to });
 
     if (filters.cursor) {
-      const cursor = decodeCursor(filters.cursor);
+      // Cursor vem do client: malformado é erro de request (400), não bug do servidor
+      let cursor: Cursor;
+      try {
+        cursor = decodeCursor(filters.cursor);
+      } catch {
+        throw new BadRequestException('Cursor de paginação inválido');
+      }
       const op = order === 'DESC' ? '<' : '>';
       qb.andWhere(`(l.timestamp, l.id) ${op} (:cursorTs, :cursorId)`, {
         cursorTs: cursor.timestamp,

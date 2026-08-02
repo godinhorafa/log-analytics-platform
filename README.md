@@ -1,98 +1,96 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Log Analytics Platform
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Plataforma de análise de logs: importação de arquivos em streaming, classificação automática de formato, armazenamento dual (PostgreSQL + Elasticsearch), consulta com filtros, busca full-text e agregações para dashboard.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+> As decisões técnicas e trade-offs estão documentados em [ARCHITECTURE.md](ARCHITECTURE.md) (ADRs).
 
-## Description
+## Stack
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- **API**: Node.js 20 · TypeScript · NestJS
+- **Dados**: PostgreSQL 16 (fonte de verdade, particionado por data) · Elasticsearch 8 (busca full-text) · Redis 7 (cache de agregações)
+- **Testes**: Jest (unitários) · Supertest + Testcontainers (integração)
 
-## Project setup
+## Como rodar
+
+Pré-requisitos: Docker + Node 20+.
 
 ```bash
-$ npm install
+cp .env.example .env
+
+# Infra (Postgres com schema, Elasticsearch, Redis)
+docker compose up -d postgres elasticsearch redis
+
+npm install
+npm run start:dev
 ```
 
-## Compile and run the project
+Ou o stack completo (API containerizada junto):
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+docker compose up -d --build
 ```
 
-## Run tests
+A API sobe em `http://localhost:3000`. As envs são validadas no boot (Joi) — faltou variável, o processo não sobe.
+
+## Testando com dados sintéticos
+
+O gerador produz arquivos nos 3 formatos suportados (com ~2% de linhas corrompidas de propósito, para demonstrar a resiliência do parser):
 
 ```bash
-# unit tests
-$ npm run test
+npx ts-node scripts/generate-logs.ts --format jsonl  --count 50000  --out samples/app.jsonl
+npx ts-node scripts/generate-logs.ts --format nginx  --count 50000  --out samples/access.log
+npx ts-node scripts/generate-logs.ts --format syslog --count 50000  --out samples/system.log
 
-# e2e tests
-$ npm run test:e2e
+# Upload (o formato é detectado automaticamente)
+curl -F "file=@samples/app.jsonl" http://localhost:3000/uploads
+# → {"uploadId":"..."}
 
-# test coverage
-$ npm run test:cov
+# Progresso/resultado do processamento
+curl http://localhost:3000/uploads/<uploadId>
 ```
 
-## Deployment
+## Endpoints
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/uploads` | Upload multipart em streaming (JSON Lines, Nginx/Apache, syslog — detecção automática) |
+| `GET` | `/uploads` | Histórico de uploads |
+| `GET` | `/uploads/:id` | Status: formato detectado, linhas totais/parseadas/com erro |
+| `GET` | `/logs` | Lista com filtros (`severity`, `service`, `from`, `to`) e paginação por cursor keyset (`cursor`, `limit`, `order`) |
+| `GET` | `/logs/aggregations` | Timeline por severidade (buckets 5min) + top serviços com erro — cache Redis 60s, invalidado ao fim de cada upload |
+| `GET` | `/search?q=...` | Busca full-text nas mensagens (Elasticsearch), com os mesmos filtros |
+| `GET` | `/health` | Checa PG, ES e Redis |
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Exemplos:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+curl "http://localhost:3000/logs?severity=ERROR,FATAL&limit=50"
+curl "http://localhost:3000/logs/aggregations?from=2026-07-30T00:00:00Z&to=2026-07-31T00:00:00Z"
+curl "http://localhost:3000/search?q=timeout&severity=ERROR"
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Testes
 
-## Resources
+```bash
+npm test          # unitários (parsers, detector de formato, retry)
+npm run test:e2e  # integração com Testcontainers (requer Docker): pipeline completo
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+Os testes de integração sobem Postgres/Elasticsearch/Redis reais, aplicam o schema versionado e exercitam upload → status → consulta → busca de ponta a ponta.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## Estrutura
 
-## Support
+```
+src/
+├── ingestion/   # upload em streaming, detecção de formato, parsers, batch writer
+├── query/       # listagem com keyset pagination + agregações com cache
+├── search/      # busca full-text (abstração SearchEngine → Elasticsearch)
+├── storage/     # entities, repositórios, providers de Redis
+├── health/      # health check das 3 dependências
+├── common/      # paginação por cursor, retry com backoff, exception filter
+└── config/      # envs tipadas e validadas no boot
+db/schema.sql    # schema versionado (particionamento, índices, materialized view)
+scripts/         # gerador de logs sintéticos
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+O schema não é gerado pelo ORM (`synchronize: false`) — é versionado em SQL e montado no initdb do container. Em produção, viraria migration.

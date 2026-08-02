@@ -39,6 +39,12 @@ services:
       elasticsearch: { condition: service_healthy }
       redis: { condition: service_started }
     env_file: .env
+    environment:
+      # Dentro da rede do compose os hosts são os nomes dos serviços —
+      # sobrescreve o .env (que aponta pra localhost, uso fora do Docker)
+      DATABASE_URL: postgres://loguser:logpass@postgres:5432/logs
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      REDIS_URL: redis://redis:6379
     ports: ["3000:3000"]
 
 volumes:
