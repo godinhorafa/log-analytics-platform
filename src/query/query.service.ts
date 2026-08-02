@@ -68,6 +68,9 @@ export class QueryService {
     if (filters.from)
       qb.andWhere('l.timestamp >= :from', { from: filters.from });
     if (filters.to) qb.andWhere('l.timestamp <= :to', { to: filters.to });
+    // usa o índice parcial idx_logs_trace (db/schema.sql)
+    if (filters.traceId)
+      qb.andWhere('l.trace_id = :traceId', { traceId: filters.traceId });
 
     if (filters.cursor) {
       // Cursor vem do client: malformado é erro de request (400), não bug do servidor
