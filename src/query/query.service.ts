@@ -20,6 +20,7 @@ export interface LogRow {
   severity: string;
   message: string;
   traceId: string | null;
+  metadata: Record<string, unknown>;
 }
 
 export interface Aggregations {
@@ -52,6 +53,7 @@ export class QueryService {
         'l.severity AS severity',
         'l.message AS message',
         'l.trace_id AS "traceId"',
+        'l.metadata AS metadata',
       ])
       .orderBy('l.timestamp', order)
       .addOrderBy('l.id', order)
