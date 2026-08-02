@@ -6,9 +6,16 @@ export interface LogFilters {
   range: TimeRange;
   services: string[];
   severities: string[];
+  /** correlação: mostra todos os logs de um mesmo trace entre serviços */
+  trace: string | null;
 }
 
-const DEFAULTS: LogFilters = { range: '24h', services: [], severities: [] };
+const DEFAULTS: LogFilters = {
+  range: '24h',
+  services: [],
+  severities: [],
+  trace: null,
+};
 
 function parseRange(raw: string | null): TimeRange {
   return (RANGES as readonly string[]).includes(raw ?? '')
@@ -29,6 +36,7 @@ export function useLogFilters() {
       range: parseRange(params.get('range')),
       services: params.get('services')?.split(',').filter(Boolean) ?? [],
       severities: params.get('severities')?.split(',').filter(Boolean) ?? [],
+      trace: params.get('trace'),
     }),
     [params],
   );
@@ -44,6 +52,8 @@ export function useLogFilters() {
         else next.delete('services');
         if (merged.severities.length) next.set('severities', merged.severities.join(','));
         else next.delete('severities');
+        if (merged.trace) next.set('trace', merged.trace);
+        else next.delete('trace');
         return next;
       });
     },

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { TableCell, TableRow } from '@/components/ui/table';
 import type { LogEntry } from '../../api/types';
@@ -60,7 +61,15 @@ export function LogRow({
               {log.traceId && (
                 <div className="flex gap-1.5">
                   <dt className="text-muted-foreground font-medium">trace_id:</dt>
-                  <dd className="font-mono">{log.traceId}</dd>
+                  <dd>
+                    <Link
+                      to={`/logs?trace=${encodeURIComponent(log.traceId)}`}
+                      className="text-primary font-mono hover:underline"
+                      title="Ver todos os logs deste trace (correlação entre serviços)"
+                    >
+                      {log.traceId}
+                    </Link>
+                  </dd>
                 </div>
               )}
               <div className="flex gap-1.5">

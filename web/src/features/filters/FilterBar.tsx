@@ -86,6 +86,21 @@ export function FilterBar({ showSeverities = true }: { showSeverities?: boolean 
           ))}
         </div>
       )}
+
+      {filters.trace && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-muted-foreground text-xs">Trace:</span>
+          <Badge
+            variant="secondary"
+            className="max-w-64 cursor-pointer font-mono"
+            onClick={() => setFilters({ trace: null })}
+            title="Remover filtro de trace"
+          >
+            <span className="truncate">{filters.trace}</span>
+            <span aria-hidden>×</span>
+          </Badge>
+        </div>
+      )}
     </div>
   );
 }

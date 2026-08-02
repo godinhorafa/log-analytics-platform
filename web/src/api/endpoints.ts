@@ -11,6 +11,7 @@ function serializeFilters(filters: LogFilters) {
     to,
     service: filters.services.join(',') || undefined,
     severity: filters.severities.join(',') || undefined,
+    traceId: filters.trace ?? undefined,
   };
 }
 
