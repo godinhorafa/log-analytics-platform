@@ -5,6 +5,32 @@ import { formatDateTime } from '../../lib/format';
 import { EmptyState, ErrorState, Skeleton } from '../../components/states';
 import { SeverityBadge } from '../logs/SeverityBadge';
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Destaca o termo buscado na mensagem — o usuário vê POR QUE o log bateu */
+function Highlight({ text, term }: { text: string; term: string }) {
+  if (!term) return <>{text}</>;
+  const parts = text.split(new RegExp(`(${escapeRegExp(term)})`, 'ig'));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === term.toLowerCase() ? (
+          <mark
+            key={i}
+            className="rounded-xs bg-amber-200/80 px-0.5 text-inherit dark:bg-amber-400/30"
+          >
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
+
 export function SearchResults({
   query,
   result,
@@ -55,7 +81,9 @@ export function SearchResults({
                   score {hit.score.toFixed(2)}
                 </span>
               </div>
-              <p className="mt-1.5 text-sm">{hit.message}</p>
+              <p className="mt-1.5 text-sm">
+                <Highlight text={hit.message} term={query} />
+              </p>
             </CardContent>
           </Card>
         </li>
