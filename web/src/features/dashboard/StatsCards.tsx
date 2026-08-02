@@ -6,8 +6,10 @@ import { Skeleton } from '../../components/states';
 
 export function StatsCards({
   aggregations,
+  anomalies,
 }: {
   aggregations: UseQueryResult<Aggregations>;
+  anomalies: number;
 }) {
   const { data, isLoading } = aggregations;
 
@@ -28,22 +30,32 @@ export function StatsCards({
       .reduce((acc, b) => acc + b.count, 0) ?? 0;
 
   const cards = [
-    { label: 'Eventos no período', value: formatNumber(total) },
-    { label: 'Erros (ERROR + FATAL)', value: formatNumber(errors) },
-    { label: 'Taxa de erro', value: total ? formatPercent(errors / total) : '—' },
+    { label: 'Eventos no período', value: formatNumber(total), alert: false },
+    { label: 'Erros (ERROR + FATAL)', value: formatNumber(errors), alert: false },
     {
-      label: 'Serviços com erro',
-      value: formatNumber(data?.topErrorServices.length ?? 0),
+      label: 'Taxa de erro',
+      value: total ? formatPercent(errors / total) : '—',
+      alert: false,
+    },
+    {
+      label: 'Janelas anômalas',
+      value: formatNumber(anomalies),
+      alert: anomalies > 0,
     },
   ];
 
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {cards.map(({ label, value }) => (
+      {cards.map(({ label, value, alert }) => (
         <Card key={label} className="py-4">
           <CardContent className="px-4">
             <p className="text-muted-foreground text-xs font-medium">{label}</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+            <p
+              className="mt-1 text-2xl font-semibold tabular-nums"
+              style={alert ? { color: '#be123c' } : undefined}
+            >
+              {value}
+            </p>
           </CardContent>
         </Card>
       ))}
