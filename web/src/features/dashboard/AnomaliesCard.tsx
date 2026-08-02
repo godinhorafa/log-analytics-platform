@@ -3,8 +3,8 @@ import { TriangleAlert } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { AnomalyWindow } from '../../lib/anomaly';
-import { formatNumber } from '../../lib/format';
-import { formatTime } from '../../lib/format';
+import { SEVERITY_COLORS } from '../../lib/severity';
+import { formatNumber, formatTime } from '../../lib/format';
 
 /**
  * Resposta direta ao "identificar comportamentos anômalos" do enunciado:
@@ -24,11 +24,15 @@ export function AnomaliesCard({
     <Card
       data-testid="anomalies-card"
       className="border-l-4 py-3"
-      style={{ borderLeftColor: '#be123c' }}
+      style={{ borderLeftColor: SEVERITY_COLORS.ERROR }}
     >
       <CardContent className="flex flex-col gap-2 px-4">
         <div className="flex items-center gap-2">
-          <TriangleAlert aria-hidden className="size-4" style={{ color: '#be123c' }} />
+          <TriangleAlert
+            aria-hidden
+            className="size-4"
+            style={{ color: SEVERITY_COLORS.ERROR }}
+          />
           <p className="text-sm font-semibold">
             {anomalies.length === 1
               ? 'Comportamento anômalo detectado'

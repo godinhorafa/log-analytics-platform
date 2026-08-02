@@ -9,9 +9,10 @@ import {
 } from 'recharts';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { Aggregations } from '../../api/types';
-import { SEVERITY_COLORS } from '../../lib/severity';
+import { chartChrome, SEVERITY_COLORS } from '../../lib/severity';
 import { formatNumber } from '../../lib/format';
 import { ErrorState, Skeleton } from '../../components/states';
+import { useTheme } from '../../hooks/useTheme';
 
 /**
  * Ranking de uma única medida → UMA cor (a de ERROR) + labels diretos.
@@ -23,6 +24,8 @@ export function TopErrorsChart({
   aggregations: UseQueryResult<Aggregations>;
 }) {
   const { data, isLoading, isError, refetch } = aggregations;
+  const { theme } = useTheme();
+  const chrome = chartChrome(theme === 'dark');
 
   if (isLoading) return <Skeleton className="h-48" />;
   if (isError) return <ErrorState onRetry={() => void refetch()} />;
@@ -50,17 +53,14 @@ export function TopErrorsChart({
             dataKey="service"
             width={140}
             fontSize={12}
-            stroke="#64748b"
+            stroke={chrome.axis}
             tickLine={false}
             axisLine={false}
           />
           <Tooltip
             formatter={(value) => [formatNumber(Number(value ?? 0)), 'erros']}
-            contentStyle={{
-              borderRadius: 8,
-              border: '1px solid #e2e8f0',
-              fontSize: 12,
-            }}
+            contentStyle={chrome.tooltip}
+            cursor={{ fill: chrome.grid, opacity: 0.4 }}
           />
           <Bar
             dataKey="count"
@@ -72,7 +72,7 @@ export function TopErrorsChart({
               dataKey="count"
               position="right"
               fontSize={12}
-              fill="#475569"
+              fill={chrome.label}
               formatter={(v) => formatNumber(Number(v ?? 0))}
             />
           </Bar>

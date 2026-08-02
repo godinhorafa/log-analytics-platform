@@ -15,9 +15,10 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import type { Aggregations } from '../../api/types';
 import type { AnomalyWindow } from '../../lib/anomaly';
 import type { BucketRow } from '../../lib/timeline';
-import { SEVERITY_COLORS, SEVERITY_ORDER } from '../../lib/severity';
+import { chartChrome, SEVERITY_COLORS, SEVERITY_ORDER } from '../../lib/severity';
 import { formatDateTime, formatNumber, formatTime } from '../../lib/format';
 import { EmptyState, ErrorState, Skeleton } from '../../components/states';
+import { useTheme } from '../../hooks/useTheme';
 
 function SeverityLegend() {
   return (
@@ -54,6 +55,8 @@ export function SeverityTimelineChart({
   anomalies: AnomalyWindow[];
 }) {
   const { isLoading, isError, refetch } = aggregations;
+  const { theme } = useTheme();
+  const chrome = chartChrome(theme === 'dark');
 
   if (isLoading) return <Skeleton className="h-80" />;
   if (isError) return <ErrorState onRetry={() => void refetch()} />;
@@ -76,19 +79,19 @@ export function SeverityTimelineChart({
     <div data-testid="severity-timeline">
       <ResponsiveContainer width="100%" height={320}>
         <BarChart data={rows} barCategoryGap="20%">
-          <CartesianGrid vertical={false} stroke="#e2e8f0" />
+          <CartesianGrid vertical={false} stroke={chrome.grid} />
           <XAxis
             dataKey="bucket"
             tickFormatter={formatTime}
             fontSize={12}
-            stroke="#64748b"
+            stroke={chrome.axis}
             tickLine={false}
-            axisLine={{ stroke: '#cbd5e1' }}
+            axisLine={{ stroke: chrome.axisLine }}
             minTickGap={40}
           />
           <YAxis
             fontSize={12}
-            stroke="#64748b"
+            stroke={chrome.axis}
             tickLine={false}
             axisLine={false}
             width={48}
@@ -109,11 +112,8 @@ export function SeverityTimelineChart({
           <Tooltip
             labelFormatter={(v) => formatDateTime(String(v))}
             formatter={(value, name) => [formatNumber(Number(value ?? 0)), name]}
-            contentStyle={{
-              borderRadius: 8,
-              border: '1px solid #e2e8f0',
-              fontSize: 12,
-            }}
+            contentStyle={chrome.tooltip}
+            cursor={{ fill: chrome.grid, opacity: 0.4 }}
           />
           <Legend content={<SeverityLegend />} />
           {SEVERITY_ORDER.map((sev) => (

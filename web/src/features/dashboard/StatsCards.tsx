@@ -1,6 +1,7 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import type { Aggregations } from '../../api/types';
+import { SEVERITY_COLORS } from '../../lib/severity';
 import { formatNumber, formatPercent } from '../../lib/format';
 import { Skeleton } from '../../components/states';
 
@@ -52,7 +53,7 @@ export function StatsCards({
             <p className="text-muted-foreground text-xs font-medium">{label}</p>
             <p
               className="mt-1 text-2xl font-semibold tabular-nums"
-              style={alert ? { color: '#be123c' } : undefined}
+              style={alert ? { color: SEVERITY_COLORS.ERROR } : undefined}
             >
               {value}
             </p>

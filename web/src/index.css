@@ -5,6 +5,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* inputs/scrollbars nativos acompanham o tema */
+.dark {
+  color-scheme: dark;
+}
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
