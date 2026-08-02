@@ -43,6 +43,10 @@ npx ts-node scripts/generate-logs.ts --format jsonl  --count 50000  --out sample
 npx ts-node scripts/generate-logs.ts --format nginx  --count 50000  --out samples/access.log
 npx ts-node scripts/generate-logs.ts --format syslog --count 50000  --out samples/system.log
 
+# Cenário de INCIDENTE: pane no billing com timeouts em cascata no api-gateway
+# (trace_id compartilhado) — dispara a detecção de anomalias do dashboard
+npx ts-node scripts/generate-logs.ts --scenario incident --count 60000
+
 # Upload (o formato é detectado automaticamente)
 curl -F "file=@samples/app.jsonl" http://localhost:3000/uploads
 # → {"uploadId":"..."}
@@ -58,7 +62,7 @@ curl http://localhost:3000/uploads/<uploadId>
 | `POST` | `/uploads` | Upload multipart em streaming (JSON Lines, Nginx/Apache, syslog — detecção automática) |
 | `GET` | `/uploads` | Histórico de uploads |
 | `GET` | `/uploads/:id` | Status: formato detectado, linhas totais/parseadas/com erro |
-| `GET` | `/logs` | Lista com filtros (`severity`, `service`, `from`, `to`) e paginação por cursor keyset (`cursor`, `limit`, `order`) |
+| `GET` | `/logs` | Lista com filtros (`severity`, `service`, `from`, `to`, `traceId`) e paginação por cursor keyset (`cursor`, `limit`, `order`) |
 | `GET` | `/logs/aggregations` | Timeline por severidade (buckets 5min) + top serviços com erro — cache Redis 60s, invalidado ao fim de cada upload |
 | `GET` | `/search?q=...` | Busca full-text nas mensagens (Elasticsearch), com os mesmos filtros |
 | `GET` | `/health` | Checa PG, ES e Redis |
@@ -92,9 +96,10 @@ src/                 # backend NestJS
 ├── health/          # health check das 3 dependências
 ├── common/          # paginação por cursor, retry com backoff, exception filter
 └── config/          # envs tipadas e validadas no boot
-web/                 # dashboard React
+web/                 # dashboard React (shadcn/ui)
 ├── src/api/         # client + tipos espelhando os DTOs do backend
 ├── src/hooks/       # filtros na URL, scroll infinito, busca com debounce, upload
+├── src/lib/         # paleta de severidade validada, rollup de timeline, detecção de anomalias
 ├── src/features/    # domínios visuais: upload, dashboard, logs, search, filters
 └── e2e/             # specs Playwright (upload, filtros, busca, scroll)
 db/schema.sql        # schema versionado (particionamento, índices, materialized view)
