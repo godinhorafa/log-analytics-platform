@@ -4,7 +4,7 @@
 /build
 
 # Logs
-logs
+/logs
 *.log
 npm-debug.log*
 pnpm-debug.log*
@@ -41,6 +41,9 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 .env.local
+
+# synthetic sample logs (regenerated via scripts/generate-logs.ts)
+/samples
 
 # temp directory
 .temp

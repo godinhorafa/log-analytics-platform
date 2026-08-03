@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: loguser
+      POSTGRES_PASSWORD: logpass
+      POSTGRES_DB: logs
+    ports: ["5433:5432"]   # host 5433: evita conflito com um Postgres nativo já usando 5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loguser -d logs"]
+      interval: 5s
+      retries: 5
+
+  elasticsearch:
+    image: elasticsearch:8.13.4
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m   # limita RAM no dev local
+    ports: ["9200:9200"]
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health"]
+      interval: 10s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  api:
+    build: .
+    depends_on:
+      postgres: { condition: service_healthy }
+      elasticsearch: { condition: service_healthy }
+      redis: { condition: service_started }
+    env_file: .env
+    environment:
+      # Dentro da rede do compose os hosts são os nomes dos serviços —
+      # sobrescreve o .env (que aponta pra localhost, uso fora do Docker)
+      DATABASE_URL: postgres://loguser:logpass@postgres:5432/logs
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      REDIS_URL: redis://redis:6379
+    ports: ["3000:3000"]
+
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_API_URL: http://localhost:3000   # o browser chama a API a partir do host
+    depends_on: [api]
+    ports: ["8080:80"]
+
+volumes:
+  pgdata:
+  esdata:
