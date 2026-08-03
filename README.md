@@ -27,19 +27,77 @@ Plataforma de análise de logs: importação de arquivos em streaming, classific
 - **Dados**: PostgreSQL 16 (fonte de verdade, particionado por data) · Elasticsearch 8 (busca full-text) · Redis 7 (cache de agregações)
 - **Testes**: Jest (unitários) · Supertest + Testcontainers (integração) · Playwright (E2E)
 
-## Como rodar
+## Como executar
 
-Pré-requisito: Docker. **Stack completo com um comando:**
+### Pré-requisitos
+
+- **Docker** (Docker Desktop no Windows/macOS) — único requisito para rodar a aplicação completa
+- **Node.js 20+** — opcional; apenas para o modo desenvolvimento (hot reload) ou para gerar arquivos de log sintéticos
+
+### Subindo o stack completo (recomendado)
 
 ```bash
+git clone https://github.com/godinhorafa/log-analytics-platform.git
+cd log-analytics-platform
 cp .env.example .env
 docker compose up -d --build
 ```
 
-- Dashboard: `http://localhost:8080`
-- API: `http://localhost:3000`
+O `--build` constrói **duas imagens Docker locais**:
 
-Para desenvolvimento local (hot reload), suba só a infra e rode API e web na mão:
+- **API** ([`Dockerfile`](Dockerfile) na raiz): build multi-stage sobre `node:20-alpine` — o primeiro estágio compila o TypeScript; o estágio final instala apenas dependências de produção e roda como usuário não-root
+- **Web** ([`web/Dockerfile`](web/Dockerfile)): compila o React com Vite e serve os arquivos estáticos com `nginx:alpine` (com fallback de SPA para as rotas do client)
+
+E sobe **5 containers**:
+
+| Serviço | Imagem | Porta no host | Papel |
+|---|---|---|---|
+| `web` | build local (nginx) | **8080** | Dashboard React |
+| `api` | build local (Node 20) | **3000** | API NestJS |
+| `postgres` | postgres:16-alpine | 5433 | Fonte de verdade — o [schema](db/schema.sql) é aplicado automaticamente no primeiro boot do volume |
+| `elasticsearch` | elasticsearch:8.13.4 | 9200 | Busca full-text |
+| `redis` | redis:7-alpine | 6379 | Cache de agregações |
+
+> A primeira subida demora alguns minutos (download das imagens base + build). As seguintes são rápidas. A API aguarda os healthchecks de Postgres e Elasticsearch antes de iniciar.
+
+### Verificando que subiu
+
+```bash
+curl http://localhost:3000/health
+# → {"status":"ok","dependencies":{"postgres":"up","elasticsearch":"up","redis":"up"}}
+```
+
+Abra **http://localhost:8080** — o dashboard carrega com um estado vazio orientando a primeira importação.
+
+### Populando com dados
+
+**Opção A — gerar logs sintéticos** (requer Node): o gerador produz arquivos nos 3 formatos suportados, com ~2% de linhas corrompidas de propósito para demonstrar a resiliência do parser:
+
+```bash
+npm install   # uma vez, para o ts-node
+
+npx ts-node scripts/generate-logs.ts --format jsonl  --count 50000 --out samples/app.jsonl
+npx ts-node scripts/generate-logs.ts --format nginx  --count 50000 --out samples/access.log
+npx ts-node scripts/generate-logs.ts --format syslog --count 50000 --out samples/system.log
+
+# Cenário de INCIDENTE: pane no billing com timeouts em cascata no api-gateway
+# (trace_id compartilhado) — dispara a detecção de anomalias do dashboard
+npx ts-node scripts/generate-logs.ts --scenario incident --count 60000
+```
+
+Depois arraste o arquivo na tela **Importar** do dashboard — ou via API:
+
+```bash
+curl -F "file=@samples/incident.jsonl" http://localhost:3000/uploads
+# → {"uploadId":"..."}
+curl http://localhost:3000/uploads/<uploadId>   # progresso/resultado
+```
+
+**Opção B — usar um log seu**: qualquer arquivo `.log`/`.jsonl`/`.txt` nos formatos JSON Lines, Nginx/Apache (combined) ou syslog (`TIMESTAMP LEVEL [serviço] mensagem`) — o formato é detectado automaticamente.
+
+### Modo desenvolvimento (hot reload)
+
+Suba só a infraestrutura e rode API e web localmente:
 
 ```bash
 docker compose up -d postgres elasticsearch redis
@@ -48,28 +106,20 @@ npm install && npm run start:dev          # API em :3000
 cd web && npm install && npm run dev      # dashboard em :5173
 ```
 
-As envs são validadas no boot (Joi) — faltou variável, o processo não sobe.
+As variáveis de ambiente são validadas no boot (Joi) — se faltar alguma, o processo não sobe e aponta qual.
 
-## Testando com dados sintéticos
-
-O gerador produz arquivos nos 3 formatos suportados (com ~2% de linhas corrompidas de propósito, para demonstrar a resiliência do parser):
+### Parando
 
 ```bash
-npx ts-node scripts/generate-logs.ts --format jsonl  --count 50000  --out samples/app.jsonl
-npx ts-node scripts/generate-logs.ts --format nginx  --count 50000  --out samples/access.log
-npx ts-node scripts/generate-logs.ts --format syslog --count 50000  --out samples/system.log
-
-# Cenário de INCIDENTE: pane no billing com timeouts em cascata no api-gateway
-# (trace_id compartilhado) — dispara a detecção de anomalias do dashboard
-npx ts-node scripts/generate-logs.ts --scenario incident --count 60000
-
-# Upload (o formato é detectado automaticamente)
-curl -F "file=@samples/app.jsonl" http://localhost:3000/uploads
-# → {"uploadId":"..."}
-
-# Progresso/resultado do processamento
-curl http://localhost:3000/uploads/<uploadId>
+docker compose down       # para os containers, preserva os dados
+docker compose down -v    # remove também os volumes (Postgres e Elasticsearch zerados)
 ```
+
+### Problemas comuns
+
+- **Porta em uso**: o compose usa 8080, 3000, 5433, 9200 e 6379 no host — libere-as ou ajuste o mapeamento no `docker-compose.yml` (o Postgres já usa 5433 justamente para não conflitar com uma instância local na 5432)
+- **Elasticsearch não sobe**: precisa de ~1GB de RAM livre; no Linux pode exigir `sysctl -w vm.max_map_count=262144`
+- **API reiniciando**: confira se o `.env` existe (`cp .env.example .env`)
 
 ## Endpoints
 
