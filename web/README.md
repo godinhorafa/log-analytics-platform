@@ -1,32 +1,21 @@
-# React + TypeScript + Vite
+# Dashboard — Log Analytics Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Frontend React do projeto. As instruções de execução, arquitetura e decisões estão no [README da raiz](../README.md) e no [ARCHITECTURE.md](../ARCHITECTURE.md).
 
-Currently, two official plugins are available:
+## Scripts
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm run dev      # dev server com hot reload em :5173 (requer a API em :3000)
+npm run build    # type-check + build de produção em dist/
+npm run lint     # oxlint
+npm run e2e      # testes Playwright (requer a infra no ar: docker compose up -d na raiz)
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Organização
+
+- `src/api/` — client HTTP e tipos espelhando as respostas do backend
+- `src/hooks/` — filtros sincronizados com a URL, scroll infinito, busca com debounce, upload com progresso vivo, tema
+- `src/lib/` — paleta de severidade (validada para daltonismo/contraste nos dois temas), rollup de timeline, detecção de anomalias
+- `src/features/` — domínios visuais: `upload`, `dashboard`, `logs`, `search`, `filters`
+- `src/components/ui/` — primitives shadcn/ui
+- `e2e/` — specs Playwright com seed de dados via API real
