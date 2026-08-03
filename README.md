@@ -4,6 +4,22 @@ Plataforma de análise de logs: importação de arquivos em streaming, classific
 
 > As decisões técnicas e trade-offs estão documentados em [ARCHITECTURE.md](ARCHITECTURE.md) (ADRs).
 
+![Dashboard com detecção de anomalias](docs/screenshots/dashboard-dark.png)
+
+## Funcionalidades
+
+- **Importação de arquivos** por drag-and-drop, processada em **streaming** (o arquivo nunca é carregado inteiro em memória) com progresso vivo do processamento
+- **Classificação automática**: detecção do formato do arquivo (JSON Lines, Nginx/Apache access log, syslog) e normalização de severidade/timestamp/serviço; linhas malformadas são contadas sem abortar a importação
+- **Dashboard analítico**: volume por severidade no tempo, **detecção de janelas anômalas** (erros acima de média + 2σ, com destaque no gráfico), top serviços com erro, distribuição por nível e taxa de erro
+- **Tabela responsiva** com **scroll infinito** (keyset pagination — custo constante em qualquer profundidade), linha expansível com metadata e **correlação por `trace_id`** entre serviços
+- **Busca full-text** (Elasticsearch) com destaque do termo e score de relevância
+- **Filtros por nível, período e serviço sincronizados com a URL** — dashboards compartilháveis por link
+- **Dark mode** com paleta de severidade validada para daltonismo e contraste nos dois temas
+
+| | |
+|---|---|
+| ![Dashboard claro](docs/screenshots/dashboard-light.png) | ![Logs filtrados](docs/screenshots/logs-dark.png) |
+
 ## Stack
 
 - **API**: Node.js 20 · TypeScript · NestJS
