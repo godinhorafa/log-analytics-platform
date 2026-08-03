@@ -8,6 +8,10 @@
  *
  * Gere um arquivo GRANDE (500k+ linhas) pra demonstrar o streaming:
  *   npx ts-node scripts/generate-logs.ts --format jsonl --count 500000 --out samples/big.jsonl
+ *
+ * Cenário de INCIDENTE (demo de anomalia): pane no billing ~7h atrás com
+ * timeouts em cascata no api-gateway (trace_id compartilhado) e recuperação:
+ *   npx ts-node scripts/generate-logs.ts --scenario incident --count 60000 --out samples/incident.jsonl
  */
 const SERVICES = ['api-gateway', 'auth-service', 'video-encoder', 'cdn-edge', 'billing', 'recommendations'];
 
@@ -86,6 +90,130 @@ interface LogEvent {
   traceId?: string;
 }
 
+// --- cenário de incidente -----------------------------------------------
+// História: pool de conexões do billing esgota → erros/fatais no billing,
+// timeouts em cascata no api-gateway (mesmo trace_id, correlacionável na UI),
+// retries elevados nos vizinhos, depois recuperação gradual.
+
+const INCIDENT_DURATION_MS = 40 * 60_000;
+const RECOVERY_DURATION_MS = 20 * 60_000;
+
+function normalEvent(ts: Date): LogEvent {
+  const severity = pickWeighted();
+  const templates = TEMPLATES[severity as keyof typeof TEMPLATES];
+  return {
+    timestamp: ts,
+    service: SERVICES[Math.floor(Math.random() * SERVICES.length)],
+    severity,
+    message: fill(templates[Math.floor(Math.random() * templates.length)]),
+    traceId: Math.random() < 0.3 ? crypto.randomUUID() : undefined,
+  };
+}
+
+/** Retorna 1..2 eventos (a cascata gera par com trace compartilhado) */
+function incidentEvents(now: number): LogEvent[] {
+  const incidentStart = now - 7 * 3600_000;
+  const incidentEnd = incidentStart + INCIDENT_DURATION_MS;
+
+  // Concentra volume na janela do incidente: sistemas em pane LOGAM MAIS
+  const r = Math.random();
+  let ts: Date;
+  let phase: 'normal' | 'incident' | 'recovery';
+  if (r < 0.68) {
+    ts = new Date(now - Math.random() * 24 * 3600_000);
+    phase =
+      ts.getTime() >= incidentStart && ts.getTime() < incidentEnd
+        ? 'incident'
+        : ts.getTime() >= incidentEnd &&
+            ts.getTime() < incidentEnd + RECOVERY_DURATION_MS
+          ? 'recovery'
+          : 'normal';
+  } else if (r < 0.9) {
+    ts = new Date(incidentStart + Math.random() * INCIDENT_DURATION_MS);
+    phase = 'incident';
+  } else {
+    ts = new Date(incidentEnd + Math.random() * RECOVERY_DURATION_MS);
+    phase = 'recovery';
+  }
+
+  if (phase === 'incident') {
+    const kind = Math.random();
+    if (kind < 0.35) {
+      // falha primária no billing
+      return [
+        Math.random() < 0.25
+          ? { timestamp: ts, service: 'billing', severity: 'FATAL', message: 'Connection pool exhausted' }
+          : {
+              timestamp: ts,
+              service: 'billing',
+              severity: 'ERROR',
+              message: `Database connection timed out after ${1000 + Math.floor(Math.random() * 4000)}ms`,
+              traceId: Math.random() < 0.5 ? crypto.randomUUID() : undefined,
+            },
+      ];
+    }
+    if (kind < 0.7) {
+      // cascata: gateway e billing falham no MESMO trace (correlação na UI)
+      const traceId = crypto.randomUUID();
+      const ms = 3000 + Math.floor(Math.random() * 2000);
+      return [
+        {
+          timestamp: ts,
+          service: 'billing',
+          severity: 'ERROR',
+          message: `Database connection timed out after ${ms - 12}ms`,
+          traceId,
+        },
+        {
+          timestamp: new Date(ts.getTime() + 15),
+          service: 'api-gateway',
+          severity: 'ERROR',
+          message: `Timeout connecting to billing after ${ms}ms`,
+          traceId,
+        },
+      ];
+    }
+    if (kind < 0.85) {
+      return [
+        {
+          timestamp: ts,
+          service: ['recommendations', 'auth-service'][Math.floor(Math.random() * 2)],
+          severity: 'WARN',
+          message: `Retry ${1 + Math.floor(Math.random() * 3)}/3 for upstream billing`,
+        },
+      ];
+    }
+    return [normalEvent(ts)];
+  }
+
+  if (phase === 'recovery') {
+    const kind = Math.random();
+    if (kind < 0.4) {
+      return [
+        {
+          timestamp: ts,
+          service: 'billing',
+          severity: 'WARN',
+          message: `Slow query took ${800 + Math.floor(Math.random() * 1500)}ms`,
+        },
+      ];
+    }
+    if (kind < 0.5) {
+      return [
+        {
+          timestamp: ts,
+          service: 'api-gateway',
+          severity: 'ERROR',
+          message: `Timeout connecting to billing after ${2000 + Math.floor(Math.random() * 1000)}ms`,
+        },
+      ];
+    }
+    return [normalEvent(ts)];
+  }
+
+  return [normalEvent(ts)];
+}
+
 async function main() {
   const { createWriteStream, mkdirSync } = await import('node:fs');
   const { dirname } = await import('node:path');
@@ -96,34 +224,40 @@ async function main() {
   };
   const count = Number(arg('count', '10000'));
   const format = arg('format', 'jsonl') as 'jsonl' | 'nginx' | 'syslog';
-  const out = arg('out', `samples/logs.${format === 'nginx' ? 'log' : format}`);
+  const scenario = arg('scenario', 'random') as 'random' | 'incident';
+  const out = arg(
+    'out',
+    scenario === 'incident'
+      ? 'samples/incident.jsonl'
+      : `samples/logs.${format === 'nginx' ? 'log' : format}`,
+  );
 
   const serialize = { jsonl: toJsonl, nginx: toNginx, syslog: toSyslog }[format];
   mkdirSync(dirname(out), { recursive: true });
   const ws = createWriteStream(out);
 
   const now = Date.now();
+  let written = 0;
   // ~2% das linhas de propósito malformadas: testa a resiliência do parser
-  for (let i = 0; i < count; i++) {
+  while (written < count) {
     if (Math.random() < 0.02) {
       ws.write('linha corrompida sem formato algum\n');
+      written++;
       continue;
     }
-    const severity = pickWeighted();
-    const templates = TEMPLATES[severity as keyof typeof TEMPLATES];
-    const event: LogEvent = {
-      timestamp: new Date(now - Math.random() * 24 * 3600_000),   // últimas 24h
-      service: SERVICES[Math.floor(Math.random() * SERVICES.length)],
-      severity,
-      message: fill(templates[Math.floor(Math.random() * templates.length)]),
-      traceId: Math.random() < 0.3 ? crypto.randomUUID() : undefined,
-    };
-    if (!ws.write(serialize(event) + '\n')) {
-      await new Promise<void>((resolve) => ws.once('drain', () => resolve()));   // backpressure também no gerador
+    const events =
+      scenario === 'incident'
+        ? incidentEvents(now)
+        : [normalEvent(new Date(now - Math.random() * 24 * 3600_000))];
+    for (const event of events) {
+      if (!ws.write(serialize(event) + '\n')) {
+        await new Promise<void>((resolve) => ws.once('drain', () => resolve())); // backpressure também no gerador
+      }
+      written++;
     }
   }
   ws.end();
-  console.log(`${count} linhas → ${out}`);
+  console.log(`${written} linhas → ${out}`);
 }
 
 main().catch(console.error);

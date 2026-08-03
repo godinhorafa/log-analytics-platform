@@ -158,6 +158,23 @@ Explicitando o que é limite de escopo vs. limite de conhecimento:
 
 ---
 
+## ADR-008 — Monorepo para a entrega (backend + frontend)
+
+**Contexto:** o desafio pede uma aplicação única ("uma plataforma web") com código no GitHub, avaliando organização do projeto e instruções de execução. Repos separados são o padrão quando há times distintos, deploys independentes e ownership separado — nenhum dos três existe aqui.
+
+**Decisão:** monorepo — frontend React em `web/`, backend na raiz, um `docker compose up` que sobe o stack completo.
+
+**Justificativa:**
+- Experiência de avaliação: um clone, um comando, tudo roda. Cada passo extra de setup é um ponto onde a avaliação pode falhar.
+- Precedente direto no domínio: Grafana — a ferramenta de observabilidade de referência — é um monorepo com backend e frontend juntos.
+- Os dois lados permanecem **separáveis**: `web/` tem `package.json`, `Dockerfile`, testes e build próprios; o único acoplamento é o `docker-compose.yml` da raiz. Extrair para dois repos seria mecânico.
+
+**Trade-offs aceitos:** em produção com times separados, avaliaria repos por domínio (ciclo de release e permissões independentes). Mesma lógica do ADR-007: limite de escopo consciente, não limite de conhecimento.
+
+**Nota (CORS):** a API habilita CORS aberto (`app.enableCors()`) — aceitável porque não há autenticação nem cookies no escopo (ADR-007); em produção, a lista de origens seria restrita à do dashboard.
+
+---
+
 ## Estratégia de testes
 
 | Camada | Ferramenta | Foco |

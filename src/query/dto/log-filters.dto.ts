@@ -25,6 +25,11 @@ export class LogFiltersDto extends CursorPaginationDto {
   @IsOptional()
   @IsDateString()
   to?: string;
+
+  // Correlação entre serviços: todos os logs de um mesmo request/trace
+  @IsOptional()
+  @IsString()
+  traceId?: string;
 }
 
 export class AggregationsQueryDto {

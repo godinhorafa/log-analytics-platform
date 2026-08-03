@@ -20,6 +20,7 @@ export interface LogRow {
   severity: string;
   message: string;
   traceId: string | null;
+  metadata: Record<string, unknown>;
 }
 
 export interface Aggregations {
@@ -52,6 +53,7 @@ export class QueryService {
         'l.severity AS severity',
         'l.message AS message',
         'l.trace_id AS "traceId"',
+        'l.metadata AS metadata',
       ])
       .orderBy('l.timestamp', order)
       .addOrderBy('l.id', order)
@@ -66,6 +68,9 @@ export class QueryService {
     if (filters.from)
       qb.andWhere('l.timestamp >= :from', { from: filters.from });
     if (filters.to) qb.andWhere('l.timestamp <= :to', { to: filters.to });
+    // usa o índice parcial idx_logs_trace (db/schema.sql)
+    if (filters.traceId)
+      qb.andWhere('l.trace_id = :traceId', { traceId: filters.traceId });
 
     if (filters.cursor) {
       // Cursor vem do client: malformado é erro de request (400), não bug do servidor
