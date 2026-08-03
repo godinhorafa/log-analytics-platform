@@ -50,10 +50,12 @@ export class ElasticsearchSearchService extends SearchEngine {
         },
       });
     }
+    // .keyword: match EXATO. No campo text o analyzer minusculiza os tokens
+    // ("ERROR" vira "error") e um terms com "ERROR" nunca bateria.
     if (opts.services?.length)
-      filter.push({ terms: { service: opts.services } });
+      filter.push({ terms: { 'service.keyword': opts.services } });
     if (opts.severities?.length)
-      filter.push({ terms: { severity: opts.severities } });
+      filter.push({ terms: { 'severity.keyword': opts.severities } });
 
     const result = await this.client.search<IndexableLog>({
       index: LOGS_INDEX,

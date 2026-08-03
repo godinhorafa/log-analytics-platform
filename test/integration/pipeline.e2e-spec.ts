@@ -207,6 +207,23 @@ describe('Pipeline de ingestão (integração)', () => {
     expect(hits.every((h) => /timeout/i.test(h.message))).toBe(true);
   });
 
+  it('aplica filtro de severidade na busca (match exato via .keyword)', async () => {
+    const withFilter = await request(app.getHttpServer())
+      .get('/search')
+      .query({ q: 'timeout', severity: 'ERROR' })
+      .expect(200);
+    const hits = withFilter.body as { severity: string }[];
+    expect(hits.length).toBe(4);
+    expect(hits.every((h) => h.severity === 'ERROR')).toBe(true);
+
+    // severidade sem ocorrências do termo → vazio (filtro realmente filtra)
+    const none = await request(app.getHttpServer())
+      .get('/search')
+      .query({ q: 'timeout', severity: 'DEBUG' })
+      .expect(200);
+    expect(none.body).toEqual([]);
+  });
+
   it('exige o parâmetro q na busca', async () => {
     await request(app.getHttpServer()).get('/search').expect(400);
   });
